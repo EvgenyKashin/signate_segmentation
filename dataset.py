@@ -2,7 +2,6 @@ import torch
 import imageio
 import os
 from torch.utils.data import Dataset
-from albumentations.torch.functional import img_to_tensor
 import numpy as np
 
 eval_names = ('car', 'pedestrian', 'lane', 'signal')
@@ -20,9 +19,9 @@ class SignateSegDataset(Dataset):
         return len(self.file_names)
 
     def __getitem__(self, item):
-        file_path = os.path.join(self.base_path, self.file_names[item])
-        image_path = file_path + '.jpg'
-        mask_path = file_path + '.png'
+        file_path = self.file_names[item]
+        image_path = os.path.join(self.base_path, 'seg_train_images', file_path + '.jpg')
+        mask_path = os.path.join(self.base_path, 'seg_train_annotations', file_path + '.png')
         image = load_img(image_path)
         mask = load_img(mask_path)
         mask = transform_label_mask(mask)
@@ -32,9 +31,9 @@ class SignateSegDataset(Dataset):
         image, mask = augmented['image'], augmented['mask']
 
         if self.mode == 'train':
-            return img_to_tensor(image), torch.from_numpy(mask).float()
+            return image, mask
         else:
-            return img_to_tensor(image), str(file_path)
+            return image, str(file_path)
 
 
 def load_img(path):
@@ -45,5 +44,5 @@ def transform_label_mask(mask):
     label_mask = np.zeros(mask.shape[:2])
     for i, eval_color in enumerate(eval_colors):
         label = (mask == eval_color).sum(axis=2) == 3
-        label_mask[label] = i
+        label_mask[label] = i + 1
     return label_mask
