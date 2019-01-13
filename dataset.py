@@ -20,8 +20,8 @@ class SignateSegDataset(Dataset):
 
     def __getitem__(self, item):
         file_path = self.file_names[item]
-        image_path = os.path.join(self.base_path, 'seg_train_images', file_path + '.jpg')
-        mask_path = os.path.join(self.base_path, 'seg_train_annotations', file_path + '.png')
+        image_path = self.base_path / 'seg_train_images' / (file_path + '.jpg')
+        mask_path = self.base_path / 'seg_train_annotations' / (file_path + '.png')
         image = load_img(image_path)
         mask = load_img(mask_path)
         mask = transform_label_mask(mask)
