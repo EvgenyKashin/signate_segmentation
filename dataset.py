@@ -23,15 +23,16 @@ class SignateSegDataset(Dataset):
         image_path = self.base_path / 'seg_train_images' / (file_path + '.jpg')
         mask_path = self.base_path / 'seg_train_annotations' / (file_path + '.png')
         image = load_img(image_path)
+        # TODO: after aug transform
         mask = load_img(mask_path)
         mask = transform_label_mask(mask)
 
         data = {'image': image, 'mask': mask}
         augmented = self.transform(**data)
-        image, mask = augmented['image'], augmented['mask']
+        image, mask = augmented['image'], augmented['mask'][0]
 
         if self.mode == 'train':
-            return image, mask
+            return image, mask.long()
         else:
             return image, str(file_path)
 
@@ -45,4 +46,4 @@ def transform_label_mask(mask):
     for i, eval_color in enumerate(eval_colors):
         label = (mask == eval_color).sum(axis=2) == 3
         label_mask[label] = i + 1
-    return label_mask
+    return np.expand_dims(label_mask, -1)
