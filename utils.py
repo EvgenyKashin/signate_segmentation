@@ -95,6 +95,7 @@ def train(args, model: nn.Module, criterion, train_loader, val_loader, validatio
             valid_loss = valid_metrics['valid_loss']
             valid_losses.append(valid_loss)
 
+            # TODO: min_iou
             if valid_loss < min_loss:
                 min_loss = valid_loss
                 save_best(epoch)

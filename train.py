@@ -34,17 +34,17 @@ def main():
     parser.add_argument('--is_deconv', default=False, type=lambda x: str(x).lower() == 'true')
     parser.add_argument('--device_ids', default='0,1', type=str)
     parser.add_argument('--root',
-                        default='/mnt/ssd0_1/kashin/ai_edge/segmentation/runs/resize_960',
+                        default='/mnt/ssd0_1/kashin/ai_edge/segmentation/runs/crop_512',
                         type=str)
-    parser.add_argument('--train_crop_width', default=1024, type=int)
-    parser.add_argument('--train_crop_height', default=1024, type=int)
+    parser.add_argument('--train_crop_width', default=512, type=int)
+    parser.add_argument('--train_crop_height', default=512, type=int)
     parser.add_argument('--train_resize_width', default=960, type=int)
     parser.add_argument('--train_resize_height', default=576, type=int)
     parser.add_argument('--val_crop_width', default=1024, type=int)
     parser.add_argument('--val_crop_height', default=1024, type=int)
     parser.add_argument('--num_workers', default=10, type=int)
     parser.add_argument('--fold', default=0, type=int)
-    parser.add_argument('--batch_size', default=5, type=int)
+    parser.add_argument('--batch_size', default=9, type=int)
     parser.add_argument('--lr', default=0.0001, type=float)
     parser.add_argument('--n_epochs', default=200, type=int)
 
@@ -80,18 +80,18 @@ def main():
 
     def train_transform(p=1):
         return Compose([
-            Resize(args.train_resize_height, args.train_resize_width),
-            # PadIfNeeded(args.train_crop_height, args.train_crop_width),
-            # RandomCrop(args.train_crop_height, args.train_crop_width),
+#             Resize(args.train_resize_height, args.train_resize_width),
+            PadIfNeeded(args.train_crop_height, args.train_crop_width),
+            RandomCrop(args.train_crop_height, args.train_crop_width),
             Normalize(),
             ToTensor(num_classes=num_classes)
         ], p=1)
 
     def val_transform(p=1):
         return Compose([
-            Resize(args.train_resize_height, args.train_resize_width),
-            # PadIfNeeded(args.train_crop_height, args.train_crop_width),
-            # CenterCrop(args.train_crop_height, args.train_crop_width),
+#             Resize(args.train_resize_height, args.train_resize_width),
+            PadIfNeeded(args.train_crop_height, args.train_crop_width),
+            CenterCrop(args.train_crop_height, args.train_crop_width),
             Normalize(),
             ToTensor(num_classes=num_classes)
         ])
