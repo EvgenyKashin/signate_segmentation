@@ -55,7 +55,7 @@ def train(args, model: nn.Module, criterion, train_loader, val_loader, validatio
     report_each = 10
     log = root.joinpath(f'train_{fold}.log').open('a')
     valid_losses = []
-    min_loss = 1e6
+    max_iou = 0
     best_epoch = 0
     for epoch in range(epoch, n_epochs + 1):
         model.train()
@@ -94,10 +94,10 @@ def train(args, model: nn.Module, criterion, train_loader, val_loader, validatio
             write_event(log, step, **valid_metrics)
             valid_loss = valid_metrics['valid_loss']
             valid_losses.append(valid_loss)
+            iou = valid_metrics['iou']
 
-            # TODO: min_iou
-            if valid_loss < min_loss:
-                min_loss = valid_loss
+            if iou > max_iou:
+                max_iou = iou
                 save_best(epoch)
                 write_event(log, step, best_model=True)
                 print('New best model')

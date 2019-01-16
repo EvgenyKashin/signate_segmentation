@@ -23,8 +23,8 @@ class SignateSegDataset(Dataset):
         image_path = self.base_path / 'seg_train_images' / (file_path + '.jpg')
         mask_path = self.base_path / 'seg_train_annotations' / (file_path + '.png')
         image = load_img(image_path)
-        # TODO: after aug transform
         mask = load_img(mask_path)
+        # TODO: after aug transform
         mask = transform_label_mask(mask)
 
         data = {'image': image, 'mask': mask}
