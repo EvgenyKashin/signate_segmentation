@@ -36,17 +36,20 @@ def deactivate_batchnorm(m):
                 
 
 def train(args, model: nn.Module, criterion, train_loader, val_loader, validation,
-          init_optimizer, root, num_classes=None, without_bn=False):
+          init_optimizer, root, num_classes=None):
     lr = args.lr
     n_epochs = args.n_epochs
     fold = args.fold
     scheduler_factor = args.scheduler_factor
     scheduler_patience = args.scheduler_patience
     early_stopping = args.early_stopping
+    metric = args.scheduler_metric
+    without_batchnorm = args.without_batchnorm
 
     optimizer = init_optimizer(lr)
-    scheduler = ReduceLROnPlateau(optimizer, factor=scheduler_factor, patience=scheduler_patience,
-                                  verbose=True, mode='max')
+    scheduler = ReduceLROnPlateau(optimizer, factor=scheduler_factor,
+                                  patience=scheduler_patience, verbose=True,
+                                  mode='max' if metric == 'auc' else 'min')
     model_path = root / f'model_{fold}.pth'
     model_path_best = root / f'model_{fold}_best.pth'
     if model_path.exists():
@@ -75,12 +78,11 @@ def train(args, model: nn.Module, criterion, train_loader, val_loader, validatio
 
     report_each = 10
     log = root.joinpath(f'train_{fold}.log').open('a')
-    valid_losses = []
-    max_iou = 0
+    best_metric = 0 if metric == 'auc' else 1e6
     best_epoch = 0
     for epoch in range(epoch, n_epochs + 1):
         model.train()
-        if without_bn:
+        if without_batchnorm:
             model.apply(deactivate_batchnorm)
         random.seed()
         tq = tqdm(total=len(train_loader) * args.batch_size)
@@ -116,22 +118,31 @@ def train(args, model: nn.Module, criterion, train_loader, val_loader, validatio
             valid_metrics = validation(model, criterion, val_loader, num_classes)
             write_event(log, step, **valid_metrics)
             valid_loss = valid_metrics['valid_loss']
-            valid_losses.append(valid_loss)
             iou = valid_metrics['iou']
 
-            if iou > max_iou:
-                max_iou = iou
-                save_best(epoch)
-                write_event(log, step, best_model=True)
-                print('New best model')
-                best_epoch = epoch
+            if metric == 'iou':
+                if iou > best_metric:
+                    best_metric = iou
+                    save_best(epoch)
+                    write_event(log, step, best_model=True)
+                    print('New best model')
+                    best_epoch = epoch
+            elif metric == 'loss':
+                if valid_loss < best_metric:
+                    best_metric = valid_loss
+                    save_best(epoch)
+                    write_event(log, step, best_model=True)
+                    print('New best model')
+                    best_epoch = epoch
+            else:
+                raise ValueError('Wrong metric value')
 
             if epoch - best_epoch > early_stopping:
                 write_event(log, step, early_stopping=True)
                 print('Early stopping')
                 return
 
-            scheduler.step(iou, epoch)
+            scheduler.step(iou if metric == 'iou' else valid_loss, epoch)
             # TODO: add to tqdm valid loss
         except KeyboardInterrupt:
             tq.close()

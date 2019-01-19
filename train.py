@@ -33,7 +33,7 @@ def main():
     parser.add_argument('--backbone', default='resnet34', type=str)
     parser.add_argument('--is_deconv', default=False, type=lambda x: str(x).lower() == 'true')
     parser.add_argument('--device_ids', default='0,1', type=str)
-    parser.add_argument('--root', default='runs/resize_1408_lr', type=str)
+    parser.add_argument('--root', default='runs/resize_1408_loss', type=str)
     parser.add_argument('--crop_width', default=768, type=int)
     parser.add_argument('--crop_height', default=768, type=int)
     parser.add_argument('--resize_width', default=1408, type=int)
@@ -46,6 +46,8 @@ def main():
     parser.add_argument('--scheduler_factor', default=0.5, type=float)
     parser.add_argument('--scheduler_patience', default=2, type=int)
     parser.add_argument('--early_stopping', default=8, type=int)
+    parser.add_argument('--scheduler_metric', default='loss', choices=['iou', 'loss'])
+    parser.add_argument('--without_batchnorm', nargs='?', const=True, default=False)
 
     args = parser.parse_args()
 
