@@ -49,7 +49,8 @@ def train(args, model: nn.Module, criterion, train_loader, val_loader, validatio
     optimizer = init_optimizer(lr)
     scheduler = ReduceLROnPlateau(optimizer, factor=scheduler_factor,
                                   patience=scheduler_patience, verbose=True,
-                                  mode='max' if metric == 'auc' else 'min')
+                                  mode='max' if metric == 'iou' else 'min',
+                                  min_lr=1e-10)
     model_path = root / f'model_{fold}.pth'
     model_path_best = root / f'model_{fold}_best.pth'
     if model_path.exists():
@@ -78,7 +79,7 @@ def train(args, model: nn.Module, criterion, train_loader, val_loader, validatio
 
     report_each = 10
     log = root.joinpath(f'train_{fold}.log').open('a')
-    best_metric = 0 if metric == 'auc' else 1e6
+    best_metric = 0 if metric == 'iou' else 1e6
     best_epoch = 0
     for epoch in range(epoch, n_epochs + 1):
         model.train()
