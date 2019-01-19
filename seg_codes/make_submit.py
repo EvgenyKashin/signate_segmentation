@@ -55,4 +55,3 @@ if __name__ == '__main__':
     json_data = make_json(args.path_to_annotations, categories)
     with open('submit.json', 'w') as f:
         json.dump(json_data,f, sort_keys=True,separators=(',', ':'))
-    
