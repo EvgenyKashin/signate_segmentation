@@ -54,6 +54,7 @@ class DecoderBlock(nn.Module):
         else:
             return self.block(F.interpolate(x, scale_factor=2, mode='nearest'))
 
+
 class ResNetUnet(nn.Module):
     def __init__(self, num_classes=1, num_filters=32, backbone='resnet34', pretrained=True,
                  is_deconv=False):
