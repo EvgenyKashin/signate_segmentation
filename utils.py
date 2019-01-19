@@ -5,6 +5,7 @@ from datetime import datetime
 import numpy as np
 import torch
 from torch import nn
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 from tqdm import tqdm
 
 
@@ -20,14 +21,32 @@ def write_event(log, step, **data):
     log.flush()
 
 
+def get_lr(optimizer):
+    for param_group in optimizer.param_groups:
+        return param_group['lr']
+
+    
+def deactivate_batchnorm(m):
+    if isinstance(m, nn.BatchNorm2d):
+        m.reset_parameters()
+        m.eval()
+        with torch.no_grad():
+            m.weight.fill_(1.0)
+            m.bias.zero_()
+                
+
 def train(args, model: nn.Module, criterion, train_loader, val_loader, validation,
-          init_optimizer, num_classes=None):
+          init_optimizer, root, num_classes=None, without_bn=False):
     lr = args.lr
     n_epochs = args.n_epochs
     fold = args.fold
-    optimizer = init_optimizer(lr)
+    scheduler_factor = args.scheduler_factor
+    scheduler_patience = args.scheduler_patience
+    early_stopping = args.early_stopping
 
-    root = Path(args.root)
+    optimizer = init_optimizer(lr)
+    scheduler = ReduceLROnPlateau(optimizer, factor=scheduler_factor, patience=scheduler_patience,
+                                  verbose=True, mode='max')
     model_path = root / f'model_{fold}.pth'
     model_path_best = root / f'model_{fold}_best.pth'
     if model_path.exists():
@@ -40,17 +59,19 @@ def train(args, model: nn.Module, criterion, train_loader, val_loader, validatio
         epoch = 1
         step = 0
 
-    save = lambda ep: torch.save({
-        'model': model.state_dict(),
-        'epoch': ep,
-        'step': step
-    }, str(model_path))
+    def save(ep):
+        torch.save({
+            'model': model.state_dict(),
+            'epoch': ep,
+            'step': step
+        }, str(model_path))
 
-    save_best = lambda ep: torch.save({
-        'model': model.state_dict(),
-        'epoch': ep,
-        'step': step
-    }, str(model_path_best))
+    def save_best(ep):
+        torch.save({
+            'model': model.state_dict(),
+            'epoch': ep,
+            'step': step
+        }, str(model_path_best))
 
     report_each = 10
     log = root.joinpath(f'train_{fold}.log').open('a')
@@ -59,9 +80,11 @@ def train(args, model: nn.Module, criterion, train_loader, val_loader, validatio
     best_epoch = 0
     for epoch in range(epoch, n_epochs + 1):
         model.train()
+        if without_bn:
+            model.apply(deactivate_batchnorm)
         random.seed()
         tq = tqdm(total=len(train_loader) * args.batch_size)
-        tq.set_description(f'Epoch: {epoch}, lr: {lr}')
+        tq.set_description(f'Epoch: {epoch}, lr: {get_lr(optimizer)}')
         losses = []
 
         try:
@@ -103,10 +126,12 @@ def train(args, model: nn.Module, criterion, train_loader, val_loader, validatio
                 print('New best model')
                 best_epoch = epoch
 
-            if epoch - best_epoch > 10:
+            if epoch - best_epoch > early_stopping:
                 write_event(log, step, early_stopping=True)
                 print('Early stopping')
                 return
+
+            scheduler.step(iou, epoch)
             # TODO: add to tqdm valid loss
         except KeyboardInterrupt:
             tq.close()
