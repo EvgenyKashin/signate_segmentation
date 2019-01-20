@@ -7,6 +7,7 @@ import torch
 from torch import nn
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from tqdm import tqdm
+from modules import nn as NN
 
 
 def cuda(x):
@@ -33,7 +34,56 @@ def deactivate_batchnorm(m):
         with torch.no_grad():
             m.weight.fill_(1.0)
             m.bias.zero_()
-                
+
+
+def make_model_bn_sync(model):
+    def fix_relu(m):
+        if isinstance(m, nn.ReLU):
+            m.inplace = False
+
+    model.resnet = model.resnet.apply(fix_relu)
+
+    model.resnet.bn1 = NN.BatchNorm2d(64)
+    model.resnet.layer1[0].bn1 = NN.BatchNorm2d(64)
+    model.resnet.layer1[0].bn2 = NN.BatchNorm2d(64)
+    model.resnet.layer1[1].bn1 = NN.BatchNorm2d(64)
+    model.resnet.layer1[1].bn2 = NN.BatchNorm2d(64)
+    model.resnet.layer1[2].bn1 = NN.BatchNorm2d(64)
+    model.resnet.layer1[2].bn2 = NN.BatchNorm2d(64)
+
+    model.resnet.layer2[0].bn1 = NN.BatchNorm2d(128)
+    model.resnet.layer2[0].bn2 = NN.BatchNorm2d(128)
+    model.resnet.layer2[0].downsample[1] = NN.BatchNorm2d(128)
+    model.resnet.layer2[1].bn1 = NN.BatchNorm2d(128)
+    model.resnet.layer2[1].bn2 = NN.BatchNorm2d(128)
+    model.resnet.layer2[2].bn1 = NN.BatchNorm2d(128)
+    model.resnet.layer2[2].bn2 = NN.BatchNorm2d(128)
+    model.resnet.layer2[3].bn1 = NN.BatchNorm2d(128)
+    model.resnet.layer2[3].bn2 = NN.BatchNorm2d(128)
+
+    model.resnet.layer3[0].bn1 = NN.BatchNorm2d(256)
+    model.resnet.layer3[0].bn2 = NN.BatchNorm2d(256)
+    model.resnet.layer3[0].downsample[1] = NN.BatchNorm2d(256)
+    model.resnet.layer3[1].bn1 = NN.BatchNorm2d(256)
+    model.resnet.layer3[1].bn2 = NN.BatchNorm2d(256)
+    model.resnet.layer3[2].bn1 = NN.BatchNorm2d(256)
+    model.resnet.layer3[2].bn2 = NN.BatchNorm2d(256)
+    model.resnet.layer3[3].bn1 = NN.BatchNorm2d(256)
+    model.resnet.layer3[3].bn2 = NN.BatchNorm2d(256)
+    model.resnet.layer3[4].bn1 = NN.BatchNorm2d(256)
+    model.resnet.layer3[4].bn2 = NN.BatchNorm2d(256)
+    model.resnet.layer3[5].bn1 = NN.BatchNorm2d(256)
+    model.resnet.layer3[5].bn2 = NN.BatchNorm2d(256)
+
+    model.resnet.layer4[0].bn1 = NN.BatchNorm2d(512)
+    model.resnet.layer4[0].bn2 = NN.BatchNorm2d(512)
+    model.resnet.layer4[0].downsample[1] = NN.BatchNorm2d(512)
+    model.resnet.layer4[1].bn1 = NN.BatchNorm2d(512)
+    model.resnet.layer4[1].bn2 = NN.BatchNorm2d(512)
+    model.resnet.layer4[2].bn1 = NN.BatchNorm2d(512)
+    model.resnet.layer4[2].bn2 = NN.BatchNorm2d(512)
+    return model
+
 
 def train(args, model: nn.Module, criterion, train_loader, val_loader, validation,
           init_optimizer, root, num_classes=None):
