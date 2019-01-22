@@ -27,6 +27,9 @@ from albumentations import (
 base_path = Path('/mnt/ssd0_1/kashin/ai_edge/segmentation')
 num_classes = 5
 
+# TODO: train method parameter
+# TODO: Submit: from 10th, 20th epoch
+
 
 def main():
     parser = argparse.ArgumentParser()
@@ -43,12 +46,13 @@ def main():
     parser.add_argument('--batch_size', default=2, type=int)
     parser.add_argument('--lr', default=0.0001, type=float)
     parser.add_argument('--n_epochs', default=200, type=int)
-    parser.add_argument('--scheduler_factor', default=0.5, type=float)
-    parser.add_argument('--scheduler_patience', default=5, type=int)
-    parser.add_argument('--early_stopping', default=20, type=int)
+    parser.add_argument('--scheduler_factor', default=0.3, type=float)
+    parser.add_argument('--scheduler_patience', default=3, type=int)
+    parser.add_argument('--early_stopping', default=10, type=int)
     parser.add_argument('--scheduler_metric', default='iou', choices=['iou', 'loss'])
     parser.add_argument('--without_batchnorm', nargs='?', const=True, default=False)
     parser.add_argument('--bn_sync', default=False, type=lambda x: str(x).lower() == 'true')
+    parser.add_argument('--metric_threshold', default=1e-4, type=float)
 
     args = parser.parse_args()
 
@@ -56,9 +60,6 @@ def main():
     root.mkdir(exist_ok=True, parents=True)
 
     model = ResNetUnet(num_classes, backbone=args.backbone, is_deconv=args.is_deconv)
-    if torch.cuda.is_available() and args.bn_sync:
-        model = utils.make_model_bn_sync(model)
-
     if torch.cuda.is_available():
         if args.device_ids:
             device_ids = list(map(int, args.device_ids.split(',')))
