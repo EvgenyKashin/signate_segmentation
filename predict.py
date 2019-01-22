@@ -25,6 +25,76 @@ test_imgs = base_path / 'seg_test_images'
 eval_colors = ((0, 0, 255), (255, 0, 0), (69, 47, 142), (255, 255, 0))
 origin_height = 1216
 origin_width = 1936
+pad_to_full = 24
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--root', default='runs/no_resize_2', type=str)
+    parser.add_argument('--method', default='full', type=str,
+                        choices=['crop', 'crop_stride', 'resize', 'full'])
+    parser.add_argument('--batch_size', default=4, type=int)
+    parser.add_argument('--channels', default=5, type=int)
+    parser.add_argument('--epoch', default=10, type=int)
+
+    args = parser.parse_args()
+
+    method = args.method
+    root = base_path / args.root
+
+    train_args = json.loads(root.joinpath('params.json').read_text())
+    resize_height = int(train_args['resize_height'])
+    resize_width = int(train_args['resize_width'])
+    crop_height = int(train_args['crop_height'])
+    crop_width = int(train_args['crop_width'])
+    fold = int(train_args['fold'])
+
+    if args.epoch == 0:
+        state = torch.load(root / f'model_{fold}_best.pth')
+        submit_folder = root / f'submit_{method}'
+        submit_folder.mkdir()
+    else:
+        state = torch.load(root / f'model_{fold}_{args.epoch}_ep.pth')
+        submit_folder = root / f'submit_{method}_{args.epoch}_ep'
+        submit_folder.mkdir()
+
+    model = ResNetUnet(5, backbone='resnet34', is_deconv=False)
+    model = nn.DataParallel(model, device_ids=[0, 1]).cuda()
+    model.load_state_dict(state['model'])
+    model = model.eval()
+
+    def transform(p=1):
+        # fix bug
+        base_trans = [
+            Normalize(),
+            ToTensor(num_classes=5)
+        ]
+
+        if method == 'resize':
+            base_trans.insert(0, Resize(resize_height, resize_width))
+        elif method == 'full':
+            base_trans.insert(0, PadIfNeeded(origin_height, origin_width + pad_to_full * 2))
+        return Compose(base_trans)
+
+    pr_transform = transform()
+
+    # TODO: make predict dataset
+    if method == 'crop':
+        predict_crops(model, pr_transform, crop_height, crop_width, submit_folder,
+                      args.batch_size)
+    elif method == 'crop_stride':
+        predict_stride_crops(model, pr_transform, crop_height, crop_width, submit_folder,
+                             args.channels, args.batch_size)
+    elif method == 'resize':
+        predict_full(model, pr_transform, submit_folder, resize=True)
+    elif method == 'full':
+        predict_full(model, pr_transform, submit_folder, resize=False)
+    else:
+        raise ValueError('Wrong method value')
+
+    root.joinpath('params_predict.json').write_text(
+        json.dumps(vars(args), indent=True, sort_keys=True)
+    )
 
 
 def transform_prediction(pr):
@@ -138,63 +208,9 @@ def predict_full(model, tr, folder, resize=True):
             pr_full = cv2.resize(pr_full, (origin_width, origin_height),
                                  interpolation=cv2.INTER_CUBIC)
         else:
-            pr_full = pr_full[:origin_height, :origin_width, :]
+            pr_full = pr_full[:origin_height, pad_to_full:origin_width+pad_to_full, :]
         imageio.imsave(folder / (test_path.name.split('.')[0] + '.png'), pr_full)
 
-
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--root', default='runs/resize_1408_lr', type=str)
-    parser.add_argument('--method', default='resize', type=str,
-                        choices=['crop', 'crop_stride', 'resize', 'full'])
-    parser.add_argument('--batch_size', default=4, type=int)
-    parser.add_argument('--channels', default=5, type=int)
-
-    args = parser.parse_args()
-
-    method = args.method
-    root = base_path / args.root
-    submit_folder = root / f'submit_{method}'
-    submit_folder.mkdir()
-
-    train_args = json.loads(root.joinpath('params.json').read_text())
-    resize_height = int(train_args['resize_height'])
-    resize_width = int(train_args['resize_width'])
-    crop_height = int(train_args['crop_height'])
-    crop_width = int(train_args['crop_width'])
-
-    state = torch.load(root / 'model_0_best.pth')
-    model = ResNetUnet(5, backbone='resnet34', is_deconv=False)
-    model = nn.DataParallel(model, device_ids=[0, 1]).cuda()
-    model.load_state_dict(state['model'])
-    model = model.eval()
-
-    def transform(p=1):
-        return Compose([
-            Resize(resize_height, resize_width),
-            Normalize(),
-            ToTensor(num_classes=5)
-        ])
-
-    pr_transform = transform()
-
-    # TODO: make predict dataset
-    if method == 'crop':
-        predict_crops(model, pr_transform, crop_height, crop_width, submit_folder,
-                      args.batch_size)
-    elif method == 'crop_stride':
-        predict_stride_crops(model, pr_transform, crop_height, crop_width, submit_folder,
-                             args.channels, args.batch_size)
-    elif method == 'resize':
-        predict_full(model, pr_transform, submit_folder, resize=True)
-    elif method == 'full':
-        predict_full(model, pr_transform, submit_folder, resize=False)
-    else:
-        raise ValueError('Wrong method value')
-
-    root.joinpath('params_predict.json').write_text(
-        json.dumps(vars(args), indent=True, sort_keys=True)
-    )
 
 if __name__ == '__main__':
     main()
