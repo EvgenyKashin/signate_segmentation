@@ -1,4 +1,3 @@
-from pathlib import Path
 import random
 import json
 from datetime import datetime
@@ -7,7 +6,6 @@ import torch
 from torch import nn
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from tqdm import tqdm
-from modules import nn as NN
 
 
 def cuda(x):
@@ -36,55 +34,6 @@ def deactivate_batchnorm(m):
             m.bias.zero_()
 
 
-def make_model_bn_sync(model):
-    def fix_relu(m):
-        if isinstance(m, nn.ReLU):
-            m.inplace = False
-
-    model.resnet = model.resnet.apply(fix_relu)
-
-    model.resnet.bn1 = NN.BatchNorm2d(64)
-    model.resnet.layer1[0].bn1 = NN.BatchNorm2d(64)
-    model.resnet.layer1[0].bn2 = NN.BatchNorm2d(64)
-    model.resnet.layer1[1].bn1 = NN.BatchNorm2d(64)
-    model.resnet.layer1[1].bn2 = NN.BatchNorm2d(64)
-    model.resnet.layer1[2].bn1 = NN.BatchNorm2d(64)
-    model.resnet.layer1[2].bn2 = NN.BatchNorm2d(64)
-
-    model.resnet.layer2[0].bn1 = NN.BatchNorm2d(128)
-    model.resnet.layer2[0].bn2 = NN.BatchNorm2d(128)
-    model.resnet.layer2[0].downsample[1] = NN.BatchNorm2d(128)
-    model.resnet.layer2[1].bn1 = NN.BatchNorm2d(128)
-    model.resnet.layer2[1].bn2 = NN.BatchNorm2d(128)
-    model.resnet.layer2[2].bn1 = NN.BatchNorm2d(128)
-    model.resnet.layer2[2].bn2 = NN.BatchNorm2d(128)
-    model.resnet.layer2[3].bn1 = NN.BatchNorm2d(128)
-    model.resnet.layer2[3].bn2 = NN.BatchNorm2d(128)
-
-    model.resnet.layer3[0].bn1 = NN.BatchNorm2d(256)
-    model.resnet.layer3[0].bn2 = NN.BatchNorm2d(256)
-    model.resnet.layer3[0].downsample[1] = NN.BatchNorm2d(256)
-    model.resnet.layer3[1].bn1 = NN.BatchNorm2d(256)
-    model.resnet.layer3[1].bn2 = NN.BatchNorm2d(256)
-    model.resnet.layer3[2].bn1 = NN.BatchNorm2d(256)
-    model.resnet.layer3[2].bn2 = NN.BatchNorm2d(256)
-    model.resnet.layer3[3].bn1 = NN.BatchNorm2d(256)
-    model.resnet.layer3[3].bn2 = NN.BatchNorm2d(256)
-    model.resnet.layer3[4].bn1 = NN.BatchNorm2d(256)
-    model.resnet.layer3[4].bn2 = NN.BatchNorm2d(256)
-    model.resnet.layer3[5].bn1 = NN.BatchNorm2d(256)
-    model.resnet.layer3[5].bn2 = NN.BatchNorm2d(256)
-
-    model.resnet.layer4[0].bn1 = NN.BatchNorm2d(512)
-    model.resnet.layer4[0].bn2 = NN.BatchNorm2d(512)
-    model.resnet.layer4[0].downsample[1] = NN.BatchNorm2d(512)
-    model.resnet.layer4[1].bn1 = NN.BatchNorm2d(512)
-    model.resnet.layer4[1].bn2 = NN.BatchNorm2d(512)
-    model.resnet.layer4[2].bn1 = NN.BatchNorm2d(512)
-    model.resnet.layer4[2].bn2 = NN.BatchNorm2d(512)
-    return model
-
-
 def train(args, model: nn.Module, criterion, train_loader, val_loader, validation,
           init_optimizer, root, num_classes=None):
     lr = args.lr
@@ -100,9 +49,11 @@ def train(args, model: nn.Module, criterion, train_loader, val_loader, validatio
     scheduler = ReduceLROnPlateau(optimizer, factor=scheduler_factor,
                                   patience=scheduler_patience, verbose=True,
                                   mode='max' if metric == 'iou' else 'min',
-                                  min_lr=1e-10)
+                                  min_lr=1e-6, threshold=args.metric_threshold)
     model_path = root / f'model_{fold}.pth'
     model_path_best = root / f'model_{fold}_best.pth'
+    model_path_intermediate = str(root / 'model_{}_{}_ep.pth')
+
     if model_path.exists():
         state = torch.load(str(model_path))
         epoch = state['epoch']
@@ -113,12 +64,17 @@ def train(args, model: nn.Module, criterion, train_loader, val_loader, validatio
         epoch = 1
         step = 0
 
-    def save(ep):
+    def save(ep, intermediate=False):
+        if intermediate:
+            path = model_path_intermediate.format(fold, ep)
+        else:
+            path = model_path
+
         torch.save({
             'model': model.state_dict(),
             'epoch': ep,
             'step': step
-        }, str(model_path))
+        }, str(path))
 
     def save_best(ep):
         torch.save({
@@ -165,21 +121,22 @@ def train(args, model: nn.Module, criterion, train_loader, val_loader, validatio
 
             write_event(log, step, loss=mean_loss)
             tq.close()
-            save(epoch + 1)
+            if epoch % 10 == 0:
+                save(epoch, intermediate=True)
             valid_metrics = validation(model, criterion, val_loader, num_classes)
             write_event(log, step, **valid_metrics)
             valid_loss = valid_metrics['valid_loss']
             iou = valid_metrics['iou']
 
             if metric == 'iou':
-                if iou > best_metric:
+                if iou - best_metric > args.metric_threshold:
                     best_metric = iou
                     save_best(epoch)
                     write_event(log, step, best_model=True)
                     print('New best model')
                     best_epoch = epoch
             elif metric == 'loss':
-                if valid_loss < best_metric:
+                if best_metric - valid_loss > args.metric_threshold:
                     best_metric = valid_loss
                     save_best(epoch)
                     write_event(log, step, best_model=True)
