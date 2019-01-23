@@ -58,7 +58,7 @@ def main():
         submit_folder = root / f'submit_{method}_{args.epoch}_ep'
         submit_folder.mkdir()
 
-    model = ResNetUnet(5, backbone='resnet34', is_deconv=False)
+    model = ResNetUnet(5, backbone=train_args['backbone'], is_deconv=False)
     model = nn.DataParallel(model, device_ids=[0, 1]).cuda()
     model.load_state_dict(state['model'])
     model = model.eval()
