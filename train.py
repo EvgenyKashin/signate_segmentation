@@ -7,7 +7,7 @@ from torch.utils.data import DataLoader
 import torch.backends.cudnn as cudnn
 from torch.optim import Adam
 from dataset import SignateSegDataset
-from models import ResNetUnet
+from models import ResNetUnet, TernausNetV2
 from losses import CrossEntropyLoss2d
 import utils
 from validation import validation
@@ -24,19 +24,18 @@ from albumentations import (
     Resize
 )
 
-base_path = Path('/mnt/ssd0_1/kashin/ai_edge/segmentation')
+base_path = Path('/mnt/ssd/kashin/ai_edge/segmentation')
 num_classes = 5
 
 # TODO: train method parameter
-# TODO: Submit: from 10th, 20th epoch
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--backbone', default='resnet34', type=str)
+    parser.add_argument('--backbone', default='wider', type=str)
     parser.add_argument('--is_deconv', default=False, type=lambda x: str(x).lower() == 'true')
-    parser.add_argument('--device_ids', default='0,1', type=str)
-    parser.add_argument('--root', default='runs/no_resize_2', type=str)
+    parser.add_argument('--device_ids', default='0', type=str)
+    parser.add_argument('--root', default='runs/resize_1408_wider', type=str)
     parser.add_argument('--crop_width', default=768, type=int)
     parser.add_argument('--crop_height', default=768, type=int)
     parser.add_argument('--resize_width', default=1408, type=int)
@@ -59,7 +58,10 @@ def main():
     root = base_path / args.root
     root.mkdir(exist_ok=True, parents=True)
 
-    model = ResNetUnet(num_classes, backbone=args.backbone, is_deconv=args.is_deconv)
+    if args.backbone == 'wider':
+        model = TernausNetV2(num_classes)
+    else:
+        model = ResNetUnet(num_classes, backbone=args.backbone, is_deconv=args.is_deconv)
     if torch.cuda.is_available():
         if args.device_ids:
             device_ids = list(map(int, args.device_ids.split(',')))
@@ -85,8 +87,9 @@ def main():
 
     def train_transform(p=1):
         return Compose([
-            # Resize(args.resize_height, args.resize_width),
-            PadIfNeeded(1216, 1984),
+            Resize(args.resize_height, args.resize_width),
+            HorizontalFlip(p=0.5),
+            # PadIfNeeded(1216, 1984),
             # RandomCrop(args.crop_height, args.crop_width),
             Normalize(),
             ToTensor(num_classes=num_classes)
@@ -94,8 +97,8 @@ def main():
 
     def val_transform(p=1):
         return Compose([
-            # Resize(args.resize_height, args.resize_width),
-            PadIfNeeded(1216, 1984),
+            Resize(args.resize_height, args.resize_width),
+            # PadIfNeeded(1216, 1984),
             # CenterCrop(args.crop_height, args.crop_width),
             Normalize(),
             ToTensor(num_classes=num_classes)

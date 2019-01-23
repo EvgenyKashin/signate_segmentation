@@ -1,7 +1,10 @@
+from collections import OrderedDict
 from torch import nn
 import torch
 from torchvision import models
 from torch.nn import functional as F
+from modules import ABN
+from modules import WiderResNet
 
 
 def get_channels(architecture):
@@ -102,3 +105,45 @@ class ResNetUnet(nn.Module):
         dec0 = self.dec0(dec1)
 
         return self.final(dec0)
+
+
+class TernausNetV2(nn.Module):
+    def __init__(self, num_classes=1, num_filters=32, is_deconv=False, **kwargs):
+        super().__init__()
+        if 'norm_act' not in kwargs:
+            norm_act = ABN
+        else:
+            norm_act = kwargs['norm_act']
+
+        self.pool = nn.MaxPool2d(2, 2)
+
+        self.encoder = WiderResNet(structure=[3, 3, 6, 3, 1, 1], classes=1, norm_act=norm_act)
+
+        self.center = DecoderBlock(1024, num_filters * 8, num_filters * 8,
+                                   is_deconv=is_deconv)
+        self.dec5 = DecoderBlock(1024 + num_filters * 8, num_filters * 8, num_filters * 8,
+                                 is_deconv=is_deconv)
+        self.dec4 = DecoderBlock(512 + num_filters * 8, num_filters * 8, num_filters * 8,
+                                 is_deconv=is_deconv)
+        self.dec3 = DecoderBlock(256 + num_filters * 8, num_filters * 2, num_filters * 2,
+                                 is_deconv=is_deconv)
+        self.dec2 = DecoderBlock(128 + num_filters * 2, num_filters * 2, num_filters,
+                                 is_deconv=is_deconv)
+        self.dec1 = ConvRelu(64 + num_filters, num_filters)
+        self.final = nn.Conv2d(num_filters, num_classes, kernel_size=1)
+
+    def forward(self, x):
+        mod1 = self.encoder.mod1(x)
+        mod2 = self.encoder.mod2(self.pool(mod1))
+        mod3 = self.encoder.mod3(self.pool(mod2))
+        mod4 = self.encoder.mod4(self.pool(mod3))
+        mod5 = self.encoder.mod5(self.pool(mod4))
+
+        center = self.center(self.pool(mod5))
+
+        dec5 = self.dec5(torch.cat([mod5, center], 1))
+        dec4 = self.dec4(torch.cat([mod4, dec5], 1))
+        dec3 = self.dec3(torch.cat([mod3, dec4], 1))
+        dec2 = self.dec2(torch.cat([mod2, dec3], 1))
+        dec1 = self.dec1(torch.cat([mod1, dec2], 1))
+        return self.final(dec1)
