@@ -8,7 +8,7 @@ import torch.backends.cudnn as cudnn
 from torch.optim import Adam
 from dataset import SignateSegDataset
 from models import ResNetUnet, TernausNetV2
-from losses import CrossEntropyLoss2d
+from losses import LossMulti
 import utils
 from validation import validation
 
@@ -35,7 +35,7 @@ def main():
     parser.add_argument('--backbone', default='wider', type=str)
     parser.add_argument('--is_deconv', default=False, type=lambda x: str(x).lower() == 'true')
     parser.add_argument('--device_ids', default='0', type=str)
-    parser.add_argument('--root', default='runs/resize_1408_wider_small', type=str)
+    parser.add_argument('--root', default='runs/resize_1408_jaccard', type=str)
     parser.add_argument('--crop_width', default=768, type=int)
     parser.add_argument('--crop_height', default=768, type=int)
     parser.add_argument('--resize_width', default=1408, type=int)
@@ -52,6 +52,7 @@ def main():
     parser.add_argument('--without_batchnorm', nargs='?', const=True, default=False)
     parser.add_argument('--bn_sync', default=False, type=lambda x: str(x).lower() == 'true')
     parser.add_argument('--metric_threshold', default=1e-3, type=float)
+    parser.add_argument('--jaccard_weight', default=0.5, type=float)
 
     args = parser.parse_args()
 
@@ -71,7 +72,7 @@ def main():
     else:
         raise SystemError('GPU device not found')
 
-    loss = CrossEntropyLoss2d().cuda()
+    loss = LossMulti(num_classes, args.jaccard_weight).cuda()
     cudnn.benchmark = True
 
     def get_split(fold=0):
