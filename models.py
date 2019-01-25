@@ -3,7 +3,7 @@ from torch import nn
 import torch
 from torchvision import models
 from torch.nn import functional as F
-from modules import ABN
+from modules import ABN, InPlaceABNSync
 from modules import WiderResNet
 
 
@@ -117,19 +117,19 @@ class TernausNetV2(nn.Module):
 
         self.pool = nn.MaxPool2d(2, 2)
 
-        self.encoder = WiderResNet(structure=[3, 3, 6, 3, 1, 1], classes=1, norm_act=norm_act)
+        self.encoder = WiderResNet(structure=[1, 1, 1, 3, 1, 1], classes=1, norm_act=norm_act)
 
-        self.center = DecoderBlock(1024, num_filters * 8, num_filters * 8,
+        self.center = DecoderBlock(512, num_filters * 8, num_filters * 8,
                                    is_deconv=is_deconv)
-        self.dec5 = DecoderBlock(1024 + num_filters * 8, num_filters * 8, num_filters * 8,
+        self.dec5 = DecoderBlock(512 + num_filters * 8, num_filters * 8, num_filters * 8,
                                  is_deconv=is_deconv)
-        self.dec4 = DecoderBlock(512 + num_filters * 8, num_filters * 8, num_filters * 8,
+        self.dec4 = DecoderBlock(384 + num_filters * 8, num_filters * 8, num_filters * 8,
                                  is_deconv=is_deconv)
-        self.dec3 = DecoderBlock(256 + num_filters * 8, num_filters * 2, num_filters * 2,
+        self.dec3 = DecoderBlock(256 + num_filters * 8, num_filters * 6, num_filters * 6,
                                  is_deconv=is_deconv)
-        self.dec2 = DecoderBlock(128 + num_filters * 2, num_filters * 2, num_filters,
+        self.dec2 = DecoderBlock(128 + num_filters * 6, num_filters * 4, num_filters * 2,
                                  is_deconv=is_deconv)
-        self.dec1 = ConvRelu(64 + num_filters, num_filters)
+        self.dec1 = ConvRelu(64 + num_filters * 2, num_filters)
         self.final = nn.Conv2d(num_filters, num_classes, kernel_size=1)
 
     def forward(self, x):
