@@ -7,7 +7,7 @@ from tqdm import tqdm
 import torch
 from torch import nn
 import numpy as np
-from models import ResNetUnet
+from models import ResNetUnet, TernausNetV2
 from albumentations.torch import ToTensor
 from albumentations import (
     HorizontalFlip,
@@ -20,7 +20,7 @@ from albumentations import (
     Resize
 )
 
-base_path = Path('/mnt/ssd0_1/kashin/ai_edge/segmentation')
+base_path = Path('/mnt/ssd/kashin/ai_edge/segmentation')
 test_imgs = base_path / 'seg_test_images'
 eval_colors = ((0, 0, 255), (255, 0, 0), (69, 47, 142), (255, 255, 0))
 origin_height = 1216
@@ -30,12 +30,12 @@ pad_to_full = 24
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--root', default='runs/no_resize_2', type=str)
-    parser.add_argument('--method', default='full', type=str,
+    parser.add_argument('--root', default='runs/resize_1408_wider_small', type=str)
+    parser.add_argument('--method', default='resize', type=str,
                         choices=['crop', 'crop_stride', 'resize', 'full'])
     parser.add_argument('--batch_size', default=4, type=int)
     parser.add_argument('--channels', default=5, type=int)
-    parser.add_argument('--epoch', default=10, type=int)
+    parser.add_argument('--epoch', default=0, type=int)
 
     args = parser.parse_args()
 
@@ -58,8 +58,12 @@ def main():
         submit_folder = root / f'submit_{method}_{args.epoch}_ep'
         submit_folder.mkdir()
 
-    model = ResNetUnet(5, backbone=train_args['backbone'], is_deconv=False)
-    model = nn.DataParallel(model, device_ids=[0, 1]).cuda()
+    if train_args['backbone'] == 'wider':
+        model = TernausNetV2(5)  # TODO: add parameter
+    else:
+        model = ResNetUnet(5, backbone=train_args['backbone'], is_deconv=args.is_deconv)
+
+    model = nn.DataParallel(model, device_ids=[0]).cuda()  # TODO: add parameter
     model.load_state_dict(state['model'])
     model = model.eval()
 
