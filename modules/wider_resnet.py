@@ -1,8 +1,9 @@
 from collections import OrderedDict
 import torch.nn as nn
-from .bn import ABN
+from .bn import ABN, InPlaceABN
 from .misc import GlobalAvgPool2d
 from .residual import IdentityResidualBlock
+from functools import partial
 
 
 class WiderResNet(nn.Module):
@@ -18,14 +19,19 @@ class WiderResNet(nn.Module):
         ]))
 
         in_channels = 64
-        channels = [(128, 128), (256, 256), (512, 512), (512, 1024), (512, 1024, 2048),
+        channels = [(128, 128), (256, 256), (384, 384), (512, 512), (512, 1024, 2048),
                     (1024, 2048, 4096)]
         for mod_id, num in enumerate(structure):
             blocks = []
             for block_id in range(num):
+                if mod_id == 2 or mod_id == 3:
+                    drop = partial(nn.Dropout2d, p=0.3)
+                else:
+                    drop = None
+
                 blocks.append((f'block{block_id+1}',
                                IdentityResidualBlock(in_channels, channels[mod_id],
-                                                     norm_act=norm_act)))
+                                                     norm_act=norm_act, dropout=drop)))
                 in_channels = channels[mod_id][-1]
 
             if mod_id <= 4:
