@@ -25,17 +25,16 @@ from albumentations import (
 )
 
 base_path = Path('/mnt/ssd/kashin/ai_edge/segmentation')
-num_classes = 5
-
 # TODO: train method parameter
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--backbone', default='resnet34', type=str)
-    parser.add_argument('--is_deconv', default=False, type=lambda x: str(x).lower() == 'true')
+    parser.add_argument('--is_deconv', default=False,
+                        type=lambda x: str(x).lower() == 'true')
     parser.add_argument('--device_ids', default='0', type=str)
-    parser.add_argument('--root', default='runs/nor_resize_jaccard', type=str)
+    parser.add_argument('--root', default='runs/full_labels', type=str)
     parser.add_argument('--crop_width', default=768, type=int)
     parser.add_argument('--crop_height', default=768, type=int)
     parser.add_argument('--resize_width', default=1408, type=int)
@@ -52,12 +51,18 @@ def main():
     parser.add_argument('--without_batchnorm', nargs='?', const=True, default=False)
     parser.add_argument('--bn_sync', default=False, type=lambda x: str(x).lower() == 'true')
     parser.add_argument('--metric_threshold', default=1e-3, type=float)
-    parser.add_argument('--jaccard_weight', default=0.5, type=float)
+    parser.add_argument('--jaccard_weight', default=0.0, type=float)
+    parser.add_argument('--labels_set', default='full', choices=['eval', 'full'], type=str)
 
     args = parser.parse_args()
 
     root = base_path / args.root
     root.mkdir(exist_ok=True, parents=True)
+
+    if args.labels_set == 'eval':
+        num_classes = 5
+    else:
+        num_classes = 20
 
     if args.backbone == 'wider':
         model = TernausNetV2(num_classes)
@@ -106,7 +111,8 @@ def main():
         ])
 
     def make_loader(file_names, shuffle=False, transform=None, mode='train', batch_size=1):
-        return DataLoader(SignateSegDataset(base_path, file_names, transform, mode),
+        return DataLoader(SignateSegDataset(base_path, file_names, transform, mode,
+                                            args.labels_set),
                           shuffle=shuffle,
                           num_workers=args.num_workers,
                           batch_size=batch_size,
