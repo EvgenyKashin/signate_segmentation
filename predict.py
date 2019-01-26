@@ -30,8 +30,8 @@ pad_to_full = 24
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--root', default='runs/resize_1408_wider_small', type=str)
-    parser.add_argument('--method', default='resize', type=str,
+    parser.add_argument('--root', default='runs/nor_resize_jaccard', type=str)
+    parser.add_argument('--method', default='full', type=str,
                         choices=['crop', 'crop_stride', 'resize', 'full'])
     parser.add_argument('--batch_size', default=4, type=int)
     parser.add_argument('--channels', default=5, type=int)
@@ -61,7 +61,8 @@ def main():
     if train_args['backbone'] == 'wider':
         model = TernausNetV2(5)  # TODO: add parameter
     else:
-        model = ResNetUnet(5, backbone=train_args['backbone'], is_deconv=args.is_deconv)
+        model = ResNetUnet(5, backbone=train_args['backbone'],
+                           is_deconv=train_args['is_deconv'])
 
     model = nn.DataParallel(model, device_ids=[0]).cuda()  # TODO: add parameter
     model.load_state_dict(state['model'])

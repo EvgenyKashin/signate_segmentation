@@ -32,10 +32,10 @@ num_classes = 5
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--backbone', default='wider', type=str)
+    parser.add_argument('--backbone', default='resnet34', type=str)
     parser.add_argument('--is_deconv', default=False, type=lambda x: str(x).lower() == 'true')
     parser.add_argument('--device_ids', default='0', type=str)
-    parser.add_argument('--root', default='runs/resize_1408_jaccard', type=str)
+    parser.add_argument('--root', default='runs/nor_resize_jaccard', type=str)
     parser.add_argument('--crop_width', default=768, type=int)
     parser.add_argument('--crop_height', default=768, type=int)
     parser.add_argument('--resize_width', default=1408, type=int)
@@ -88,9 +88,9 @@ def main():
 
     def train_transform(p=1):
         return Compose([
-            Resize(args.resize_height, args.resize_width),
+            # Resize(args.resize_height, args.resize_width),
             HorizontalFlip(p=0.5),
-            # PadIfNeeded(1216, 1984),
+            PadIfNeeded(1216, 1984),
             # RandomCrop(args.crop_height, args.crop_width),
             Normalize(),
             ToTensor(num_classes=num_classes)
@@ -98,8 +98,8 @@ def main():
 
     def val_transform(p=1):
         return Compose([
-            Resize(args.resize_height, args.resize_width),
-            # PadIfNeeded(1216, 1984),
+            # Resize(args.resize_height, args.resize_width),
+            PadIfNeeded(1216, 1984),
             # CenterCrop(args.crop_height, args.crop_width),
             Normalize(),
             ToTensor(num_classes=num_classes)
