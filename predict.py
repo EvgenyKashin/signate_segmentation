@@ -20,7 +20,7 @@ from albumentations import (
     Resize
 )
 
-base_path = Path('/mnt/ssd0_1/kashin/ai_edge/segmentation')
+base_path = Path('/mnt/ssd/kashin/ai_edge/segmentation')
 test_imgs = base_path / 'seg_test_images'  # seg_val_images
 eval_colors = ((0, 0, 255), (255, 0, 0), (69, 47, 142), (255, 255, 0))
 full_colors = [[0, 0, 255], [255, 0, 0], [69, 47, 142], [193, 214, 0],
@@ -29,6 +29,8 @@ full_colors = [[0, 0, 255], [255, 0, 0], [69, 47, 142], [193, 214, 0],
                [0, 152, 225], [0, 203, 151], [85, 255, 50],
                [92, 136, 125], [136, 45, 66], [0, 255, 255],
                [215, 0, 255], [180, 131, 135], [81, 99, 0], [86, 62, 67]]
+eval_labels = (0, 1, 2, 8)
+
 origin_height = 1216
 origin_width = 1936
 pad_to_full = 24
@@ -36,8 +38,8 @@ pad_to_full = 24
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--root', default='runs/resnet18', type=str)
-    parser.add_argument('--method', default='crop_stride', type=str,
+    parser.add_argument('--root', default='runs/full_labels', type=str)
+    parser.add_argument('--method', default='full', type=str,
                         choices=['crop', 'crop_stride', 'resize', 'full'])
     parser.add_argument('--batch_size', default=3, type=int)
     parser.add_argument('--channels', default=5, type=int)
@@ -50,17 +52,18 @@ def main():
     root = base_path / args.root
     labels_set = args.predict_labels_set
 
-    if labels_set == 'eval':
-        num_classes = 5
-    else:
-        num_classes = 20
-
     train_args = json.loads(root.joinpath('params.json').read_text())
     resize_height = int(train_args['resize_height'])
     resize_width = int(train_args['resize_width'])
     crop_height = int(train_args['crop_height'])
     crop_width = int(train_args['crop_width'])
     fold = int(train_args['fold'])
+    train_labels_set = train_args['labels_set']
+
+    if train_labels_set == 'eval':
+        num_classes = 5
+    else:
+        num_classes = 20
 
     if args.epoch == 0:
         state = torch.load(root / f'model_{fold}_best.pth')
@@ -101,14 +104,16 @@ def main():
     # TODO: make predict dataset
     if method == 'crop':
         predict_crops(model, pr_transform, crop_height, crop_width, submit_folder,
-                      args.batch_size, labels_set)
+                      args.batch_size, labels_set, train_labels_set)
     elif method == 'crop_stride':
         predict_stride_crops(model, pr_transform, crop_height, crop_width, submit_folder,
-                             args.channels, args.batch_size, labels_set)
+                             args.channels, args.batch_size, labels_set, train_labels_set)
     elif method == 'resize':
-        predict_full(model, pr_transform, submit_folder, resize=True, labels_set=labels_set)
+        predict_full(model, pr_transform, submit_folder, resize=True, labels_set=labels_set,
+                     train_labels_set=train_labels_set)
     elif method == 'full':
-        predict_full(model, pr_transform, submit_folder, resize=False, labels_set=labels_set)
+        predict_full(model, pr_transform, submit_folder, resize=False, labels_set=labels_set,
+                     train_labels_set=train_labels_set)
     else:
         raise ValueError('Wrong method value')
 
@@ -117,16 +122,23 @@ def main():
     )
 
 
-def transform_prediction(pr, labels_set):
+def transform_prediction(pr, labels_set, train_labels_set):
+    delta = 0
+    if train_labels_set == 'eval':
+        # because if training was not on all labels set, than there is background class '0'
+        delta = 1
+
     if labels_set == 'eval':
         colors = eval_colors
+        labels_range = eval_labels
     elif labels_set == 'full':
         colors = full_colors
+        labels_range = range(len(colors))
     else:
         raise ValueError('Wrong labels_set parameter')
     pr_mask = np.zeros(pr.shape + (3,))
-    for i, col in enumerate(colors):
-        label = (pr == i + 1)
+    for i, col in zip(labels_range, colors):
+        label = (pr == i + delta)
         pr_mask[label] = col
     pr_mask = pr_mask.astype(np.uint8)
     return pr_mask
@@ -139,7 +151,8 @@ def pad_img(img, crop_height, crop_width):
     return img
 
 
-def predict_crops(model, tr, crop_height, crop_width, folder, bs=4, labels_set='eval'):
+def predict_crops(model, tr, crop_height, crop_width, folder, bs=4, labels_set='eval',
+                  train_labels_set='eval'):
     height_start_inds = np.arange(0, origin_height, crop_height)
     width_start_inds = np.arange(0, origin_width, crop_width)
 
@@ -164,7 +177,7 @@ def predict_crops(model, tr, crop_height, crop_width, folder, bs=4, labels_set='
         pr = []
         for i in range(crop_pr.shape[0]):
             pr.append(transform_prediction(crop_pr[i].numpy().argmax(0),
-                                           labels_set=labels_set))
+                                           labels_set=labels_set, train_labels_set=train_labels_set))
 
         pr_image = np.zeros((origin_height, origin_width, 3))
         i = 0
@@ -192,7 +205,7 @@ def predict_crops(model, tr, crop_height, crop_width, folder, bs=4, labels_set='
 
 
 def predict_stride_crops(model, tr, crop_height, crop_width, folder, channels=5, bs=4,
-                         labels_set='eval'):
+                         labels_set='eval', train_labels_set='eval'):
     height_start_stride_inds = np.arange(0, origin_height + 2 * crop_height,
                                          crop_height // channels)
     width_start_stride_inds = np.arange(0, origin_width + 2 * crop_width,
@@ -250,17 +263,18 @@ def predict_stride_crops(model, tr, crop_height, crop_width, folder, channels=5,
                     k += 1
         pr_image_mode = torch.Tensor(pr_image).mode(2, keepdim=False)[0].numpy()
         pr_image_mode = pr_image_mode[crop_height:-crop_height, crop_width:-crop_width]
-        pr_image_mode = transform_prediction(pr_image_mode, labels_set=labels_set)
+        pr_image_mode = transform_prediction(pr_image_mode, labels_set=labels_set,
+                                             train_labels_set=train_labels_set)
         imageio.imsave(folder / (path.name.split('.')[0] + '.png'), pr_image_mode)
 
 
-def predict_full(model, tr, folder, resize=True, labels_set='eval'):
+def predict_full(model, tr, folder, resize=True, labels_set='eval', train_labels_set='eval'):
     for test_path in tqdm(list(test_imgs.iterdir())):
         test_img = imageio.imread(test_path)
         tr_img = tr(image=test_img)['image']
         pr = model(tr_img.unsqueeze(0))[0]
         pr = pr.data.cpu().numpy().argmax(0)
-        pr_full = transform_prediction(pr, labels_set=labels_set)
+        pr_full = transform_prediction(pr, labels_set=labels_set, train_labels_set=train_labels_set)
         if resize:
             pr_full = cv2.resize(pr_full, (origin_width, origin_height),
                                  interpolation=cv2.INTER_CUBIC)
