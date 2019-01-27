@@ -21,7 +21,7 @@ from albumentations import (
 )
 
 base_path = Path('/mnt/ssd/kashin/ai_edge/segmentation')
-test_imgs = base_path / 'seg_test_images'  # seg_val_images
+test_imgs = base_path / 'seg_test_images'  # seg_val_images seg_test_images
 eval_colors = ((0, 0, 255), (255, 0, 0), (69, 47, 142), (255, 255, 0))
 full_colors = [[0, 0, 255], [255, 0, 0], [69, 47, 142], [193, 214, 0],
                [180, 0, 129], [255, 121, 166], [65, 166, 1],
@@ -85,7 +85,6 @@ def main():
     model = model.eval()
 
     def transform(p=1):
-        # fix bug
         base_trans = [
             Normalize(),
             ToTensor(num_classes=num_classes)
@@ -212,8 +211,8 @@ def predict_stride_crops(model, tr, crop_height, crop_width, folder, channels=5,
                                         crop_width // channels)
     for path in tqdm(list(test_imgs.iterdir())):
         img = imageio.imread(path)
-        paded_img = pad_img(img, crop_height, crop_width)
-        pr_image = np.zeros(paded_img.shape[:2] + (channels,))
+        padded_img = pad_img(img, crop_height, crop_width)
+        pr_image = np.zeros(padded_img.shape[:2] + (channels,))
 
         all_crops = []
         for i in range(channels):
@@ -221,7 +220,7 @@ def predict_stride_crops(model, tr, crop_height, crop_width, folder, channels=5,
 
             for h_s in height_start_stride_inds[i::channels]:
                 for w_s in width_start_stride_inds[i::channels]:
-                    crop = paded_img[h_s: h_s + crop_height, w_s: w_s + crop_width]
+                    crop = padded_img[h_s: h_s + crop_height, w_s: w_s + crop_width]
                     crops_stride.append(crop)
             all_crops.append(crops_stride)
 
@@ -242,8 +241,8 @@ def predict_stride_crops(model, tr, crop_height, crop_width, folder, channels=5,
             k = 0
             for h_s in height_start_stride_inds[i::channels]:
                 for w_s in width_start_stride_inds[i::channels]:
-                    h_end = min(paded_img.shape[0] - h_s, crop_height)
-                    w_end = min(paded_img.shape[1] - w_s, crop_width)
+                    h_end = min(padded_img.shape[0] - h_s, crop_height)
+                    w_end = min(padded_img.shape[1] - w_s, crop_width)
 
                     # because of padding from top and left size, TODO: refactor or use cv2.pad transform
                     h_delta = 0
