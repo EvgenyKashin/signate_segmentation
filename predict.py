@@ -20,7 +20,7 @@ from albumentations import (
     Resize
 )
 
-base_path = Path('/mnt/ssd/kashin/ai_edge/segmentation')
+base_path = Path('/mnt/ssd0_1/kashin/ai_edge/segmentation')
 test_imgs = base_path / 'seg_test_images'  # seg_val_images
 eval_colors = ((0, 0, 255), (255, 0, 0), (69, 47, 142), (255, 255, 0))
 full_colors = [[0, 0, 255], [255, 0, 0], [69, 47, 142], [193, 214, 0],
@@ -36,13 +36,13 @@ pad_to_full = 24
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--root', default='runs/nor_resize_jaccard', type=str)
-    parser.add_argument('--method', default='full', type=str,
+    parser.add_argument('--root', default='runs/resnet18', type=str)
+    parser.add_argument('--method', default='crop_stride', type=str,
                         choices=['crop', 'crop_stride', 'resize', 'full'])
-    parser.add_argument('--batch_size', default=4, type=int)
+    parser.add_argument('--batch_size', default=3, type=int)
     parser.add_argument('--channels', default=5, type=int)
     parser.add_argument('--epoch', default=0, type=int)
-    parser.add_argument('--predict_labels_set', choices=['eval', 'full'], default='eval')
+    parser.add_argument('--predict_labels_set', default='eval', choices=['eval', 'full'])
 
     args = parser.parse_args()
 
@@ -90,6 +90,8 @@ def main():
 
         if method == 'resize':
             base_trans.insert(0, Resize(resize_height, resize_width))
+        elif method.startswith('crop'):
+            base_trans.insert(0, PadIfNeeded(crop_height, crop_width))
         elif method == 'full':
             base_trans.insert(0, PadIfNeeded(origin_height, origin_width + pad_to_full * 2))
         return Compose(base_trans)
@@ -156,12 +158,12 @@ def predict_crops(model, tr, crop_height, crop_width, folder, bs=4, labels_set='
         crop_pr = []
         for j in range(0, crop_tr.size(0), bs):
             pr = model(crop_tr[j:j+bs])
-            crop_pr.append(pr)
+            crop_pr.append(pr.data.cpu())
         crop_pr = torch.cat(crop_pr, 0)
 
         pr = []
         for i in range(crop_pr.shape[0]):
-            pr.append(transform_prediction(crop_pr[i].data.cpu().numpy().argmax(0),
+            pr.append(transform_prediction(crop_pr[i].numpy().argmax(0),
                                            labels_set=labels_set))
 
         pr_image = np.zeros((origin_height, origin_width, 3))
@@ -170,9 +172,23 @@ def predict_crops(model, tr, crop_height, crop_width, folder, bs=4, labels_set='
             for w_s in width_start_inds:
                 h_end = min(img.shape[0] - h_s, crop_height)
                 w_end = min(img.shape[1] - w_s, crop_width)
-                pr_image[h_s: h_s + crop_height, w_s: w_s + crop_width] = pr[i][:h_end, :w_end]
+
+                # because of padding from top and left size, TODO: refactor or use cv2.pad transform
+                h_delta = 0
+                if h_end != crop_height:
+                    h_delta = crop_height - h_end
+                    h_delta = h_delta // 2
+                    h_end += h_delta
+
+                w_delta = 0
+                if w_end != crop_width:
+                    w_delta = crop_width - w_end
+                    w_delta = w_delta // 2
+                    w_end += w_delta
+                pr_image[h_s: h_s + crop_height, w_s: w_s + crop_width] =\
+                    pr[i][h_delta:h_end, w_delta:w_end]
                 i += 1
-        imageio.imsave(folder / (path.name.split('.')[0] + '.png'), pr_image)
+        imageio.imsave(folder / (path.name.split('.')[0] + '.png'), pr_image.astype(np.uint8))
 
 
 def predict_stride_crops(model, tr, crop_height, crop_width, folder, channels=5, bs=4,
@@ -199,23 +215,38 @@ def predict_stride_crops(model, tr, crop_height, crop_width, folder, channels=5,
             crop_tr = [tr(image=cr)['image'].unsqueeze(0) for cr in crops_stride]
             crop_tr = torch.cat(crop_tr, 0)
 
+            # TODO: parallelize
             crop_pr = []
             for j in range(0, crop_tr.size(0), bs):
-                pr = model(crop_tr[j:j + bs])
-                crop_pr.append(pr)
+                pr = model(crop_tr[j:j+bs])
+                crop_pr.append(pr.data.cpu())
             crop_pr = torch.cat(crop_pr, 0)
 
             pr = []
             for j in range(crop_pr.shape[0]):
-                pr.append(crop_pr[j].data.cpu().numpy().argmax(0))  # transform_prediction after
+                pr.append(crop_pr[j].numpy().argmax(0))  # transform_prediction after
 
             k = 0
             for h_s in height_start_stride_inds[i::channels]:
                 for w_s in width_start_stride_inds[i::channels]:
                     h_end = min(paded_img.shape[0] - h_s, crop_height)
                     w_end = min(paded_img.shape[1] - w_s, crop_width)
+
+                    # because of padding from top and left size, TODO: refactor or use cv2.pad transform
+                    h_delta = 0
+                    if h_end != crop_height:
+                        h_delta = crop_height - h_end
+                        h_delta = h_delta // 2
+                        h_end += h_delta
+
+                    w_delta = 0
+                    if w_end != crop_width:
+                        w_delta = crop_width - w_end
+                        w_delta = w_delta // 2
+                        w_end += w_delta
+
                     pr_image[h_s: h_s + crop_height, w_s: w_s + crop_width, i] = \
-                        pr[k][:h_end, :w_end]
+                        pr[k][h_delta:h_end, w_delta:w_end]
                     k += 1
         pr_image_mode = torch.Tensor(pr_image).mode(2, keepdim=False)[0].numpy()
         pr_image_mode = pr_image_mode[crop_height:-crop_height, crop_width:-crop_width]
