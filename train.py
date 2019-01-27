@@ -8,7 +8,7 @@ import torch.backends.cudnn as cudnn
 from torch.optim import Adam
 from dataset import SignateSegDataset
 from models import ResNetUnet, TernausNetV2
-from losses import LossMulti
+from losses import LossMulti, FocalLoss
 import utils
 from validation import validation
 
@@ -24,24 +24,24 @@ from albumentations import (
     Resize
 )
 
-base_path = Path('/mnt/ssd/kashin/ai_edge/segmentation')
+base_path = Path('/mnt/ssd0_1/kashin/ai_edge/segmentation')
 # TODO: train method parameter
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--backbone', default='resnet34', type=str)
+    parser.add_argument('--backbone', default='resnet18', type=str)
     parser.add_argument('--is_deconv', default=False,
                         type=lambda x: str(x).lower() == 'true')
-    parser.add_argument('--device_ids', default='0', type=str)
-    parser.add_argument('--root', default='runs/full_labels', type=str)
+    parser.add_argument('--device_ids', default='0,1', type=str)
+    parser.add_argument('--root', default='runs/focal', type=str)
     parser.add_argument('--crop_width', default=768, type=int)
     parser.add_argument('--crop_height', default=768, type=int)
     parser.add_argument('--resize_width', default=1408, type=int)
     parser.add_argument('--resize_height', default=896, type=int)
     parser.add_argument('--num_workers', default=10, type=int)
     parser.add_argument('--fold', default=0, type=int)
-    parser.add_argument('--batch_size', default=3, type=int)
+    parser.add_argument('--batch_size', default=8, type=int)
     parser.add_argument('--lr', default=0.0001, type=float)
     parser.add_argument('--n_epochs', default=200, type=int)
     parser.add_argument('--scheduler_factor', default=0.3, type=float)
@@ -52,7 +52,7 @@ def main():
     parser.add_argument('--bn_sync', default=False, type=lambda x: str(x).lower() == 'true')
     parser.add_argument('--metric_threshold', default=1e-3, type=float)
     parser.add_argument('--jaccard_weight', default=0.0, type=float)
-    parser.add_argument('--labels_set', default='full', choices=['eval', 'full'], type=str)
+    parser.add_argument('--labels_set', default='eval', choices=['eval', 'full'], type=str)
 
     args = parser.parse_args()
 
@@ -77,7 +77,8 @@ def main():
     else:
         raise SystemError('GPU device not found')
 
-    loss = LossMulti(num_classes, args.jaccard_weight).cuda()
+    # loss = LossMulti(num_classes, args.jaccard_weight).cuda()
+    loss = FocalLoss(gamma=2).cuda()
     cudnn.benchmark = True
 
     def get_split(fold=0):
@@ -95,8 +96,8 @@ def main():
         return Compose([
             # Resize(args.resize_height, args.resize_width),
             HorizontalFlip(p=0.5),
-            PadIfNeeded(1216, 1984),
-            # RandomCrop(args.crop_height, args.crop_width),
+            # PadIfNeeded(1216, 1984),
+            RandomCrop(args.crop_height, args.crop_width),
             Normalize(),
             ToTensor(num_classes=num_classes)
         ], p=1)
@@ -104,8 +105,8 @@ def main():
     def val_transform(p=1):
         return Compose([
             # Resize(args.resize_height, args.resize_width),
-            PadIfNeeded(1216, 1984),
-            # CenterCrop(args.crop_height, args.crop_width),
+            # PadIfNeeded(1216, 1984),
+            CenterCrop(args.crop_height, args.crop_width),
             Normalize(),
             ToTensor(num_classes=num_classes)
         ])
