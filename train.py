@@ -15,7 +15,6 @@ from validation import validation
 from albumentations.torch import ToTensor
 from albumentations import (
     HorizontalFlip,
-    VerticalFlip,
     Normalize,
     Compose,
     PadIfNeeded,
@@ -109,7 +108,7 @@ def main():
         else:
             base_trans.insert(0, PadIfNeeded(1216, 1984))
 
-        return Compose(base_trans, p=1)
+        return Compose(base_trans, p=p)
 
     def val_transform(p=1):
         base_trans = [
@@ -123,7 +122,7 @@ def main():
         else:
             base_trans.insert(0, PadIfNeeded(1216, 1984))
 
-        return Compose(base_trans, p=1)
+        return Compose(base_trans, p=p)
 
     def make_loader(file_names, shuffle=False, transform=None, mode='train', batch_size=1):
         return DataLoader(SignateSegDataset(base_path, file_names, transform, mode,

@@ -43,7 +43,6 @@ def validation(model: nn.Module, criterion, valid_loader, num_classes):
 
 
 def calculate_confusion_matrix_from_arrays(prediction, ground_truth, nr_labels):
-    # import pdb; pdb.set_trace()
     replace_indices = np.vstack((
         ground_truth.flatten(),
         prediction.flatten())

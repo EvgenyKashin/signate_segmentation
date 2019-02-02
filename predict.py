@@ -10,13 +10,9 @@ import numpy as np
 from models import ResNetUnet, TernausNetV2
 from albumentations.torch import ToTensor
 from albumentations import (
-    HorizontalFlip,
-    VerticalFlip,
     Normalize,
     Compose,
     PadIfNeeded,
-    RandomCrop,
-    CenterCrop,
     Resize
 )
 

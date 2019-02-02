@@ -1,9 +1,8 @@
-from collections import OrderedDict
 from torch import nn
 import torch
 from torchvision import models
 from torch.nn import functional as F
-from modules import ABN, InPlaceABNSync
+from modules import ABN
 from modules import WiderResNet
 
 
