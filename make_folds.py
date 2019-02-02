@@ -31,6 +31,7 @@ def main():
         index = attr_prod.index((route, tod))
         attr_prod_ind.append(index)
 
+    # Stratification on combination of route and time of day
     folds = {}
     skf = StratifiedKFold(n_splits=args.n_splits, random_state=42)
     splits = skf.split(attr_prod_ind, attr_prod_ind)
