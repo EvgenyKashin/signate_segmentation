@@ -1,9 +1,11 @@
 # Signate segmentation
-My solution for [AI Edge Contest (Segmentation Division)](https://signate.jp/competitions/143) - (22 from 402 participants with 0.652 IoU).
+My solution for [AI Edge Contest (Segmentation Division)](https://signate.jp/competitions/143) - 22 place from 402 participants with 0.652 IoU.
 
 ## Data
-The training data for segmentation models consist of 2,243 images, test - 649. Images have resolution of 1936 x 1216.
-Categories utilized for submission evaluation (totally 20 categories):
+<img src="imgs/examples.png">
+
+The training data for segmentation models consist of 2,243 images, test data - 649. Images have resolution of 1936 x 1216.
+Categories utilized for submission evaluation (but totally in data - 20 categories):
 - car
 - pedestrian
 - signal
@@ -12,8 +14,8 @@ Categories utilized for submission evaluation (totally 20 categories):
 Notebook with [EDA](https://github.com/EvgenyKashin/signate_segmentation/blob/master/EDA.ipynb).
 
 ## Model
-I'm tried Unet with different pretrained backbones. For validation, train dataset was splitted on 7 folds
-statified by route category and time of day. Notebook with model's [errors analysis](https://github.com/EvgenyKashin/signate_segmentation/blob/master/Error_analysis.ipynb).
+I used Unet with different pretrained backbones. Train dataset was splitted on 7 folds
+statified by route category and time of day for validation. Notebook with model's [errors analysis](https://github.com/EvgenyKashin/signate_segmentation/blob/master/Error_analysis.ipynb).
 
 ## Methods
 - Train on crops (256px, 512px, 768px); predict on full, predict on crops, predict on crops with intersection.
@@ -26,26 +28,28 @@ statified by route category and time of day. Notebook with model's [errors analy
 - early stopping
 - different backbones (ResNet family + WideResnet)
 - different loss functions (bce, jaccard, focal)
-- a lot more (see train.py input args)
+- a lot more (see input args of `train.py`)
 
 ## What didn't work
 - [In-place activated batchnorm](https://github.com/mapillary/inplace_abn) - doesn't reduce memory usage too much
 - [fp16 training](https://github.com/NVIDIA/apex) - it's really free a lot GPU memory and you can use bigger batch size,
-but for me it doesn't converges to good results (yep, I tried dynamic_loss_scale=True)
+but model didn't converge to good results (yep, I tried `dynamic_loss_scale=True`)
 
 ## TODO
 - strong image augmentations
 - one cycle learning rate
 - snapshot ensembling + folds ensembling
-- se, scSE blocks in decoder
+- SE, scSE blocks in decoder
 - TTA
-- linkNet
+- LinkNet
 - pseudo labeling
+- more experiments with loss combinations
 
 ## Training
-Best model was trained on full size images with batch size = 3 on Titan V CEO edition (with 32 Gb memory). 
+Best model (resnet 34) was trained on full size images with `batch_size=3` on Titan V CEO Edition with *32 Gb memory* (thanks to [Scitator](https://github.com/Scitator)). 
 Training was on all 20 categories with bce loss for 20 epochs (12 hours).
 
+## Prediction visualization
 Top image - raw, middle - ground true, bottom - model prediction.
 ### Model trained on 4 categories
 
